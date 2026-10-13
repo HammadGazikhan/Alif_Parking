@@ -1,0 +1,252 @@
+// Alif Parking Management Portal - data model
+// All monetary values are stored as integer paise (1 INR = 100 paise).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ParkingFeeStatus {
+  DUE
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  MOCK
+}
+
+enum NotificationType {
+  PAYMENT_DUE
+  PAYMENT_SUCCESS
+  PAYMENT_OVERDUE
+  PAYMENT_FAILED
+  FEE_GENERATED
+  SYSTEM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum AuditAction {
+  EMPLOYEE_CREATED
+  EMPLOYEE_UPDATED
+  EMPLOYEE_ACTIVATED
+  EMPLOYEE_DEACTIVATED
+  VEHICLE_CREATED
+  VEHICLE_UPDATED
+  VEHICLE_DELETED
+  FEES_GENERATED
+  FEE_UPDATED
+  FEE_CANCELLED
+  FEES_MARKED_OVERDUE
+  PAYMENT_STATUS_CHANGED
+  SETTINGS_UPDATED
+  FEE_RULE_CREATED
+  FEE_RULE_UPDATED
+  FEE_RULE_DELETED
+  CATEGORY_CREATED
+  CATEGORY_UPDATED
+  CATEGORY_ACTIVATED
+  CATEGORY_DEACTIVATED
+  REMINDER_SENT
+}
+
+model User {
+  id              String     @id @default(cuid())
+  name            String
+  /// Work email; matched against the Microsoft Entra ID sign-in. Stored lowercase.
+  email           String     @unique
+  phone           String?
+  /// Job title copied from Microsoft, editable by an admin.
+  designation     String?
+  /// Small Entra profile photo copied when the employee is added. Not part of the session.
+  avatar          Bytes?
+  avatarType      String?
+  role            Role       @default(EMPLOYEE)
+  status          UserStatus @default(ACTIVE)
+  parkingEligible Boolean    @default(true)
+  /// Clover Hills free pass. Listed on the monthly pass sheet and never billed.
+  freePass        Boolean    @default(false)
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  vehicles      Vehicle[]
+  parkingFees   ParkingFee[]
+  notifications Notification[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@index([role, status])
+}
+
+model VehicleCategory {
+  id         String   @id @default(cuid())
+  name       String
+  /// Lowercased name. Enforces case-insensitive uniqueness.
+  nameKey    String   @unique
+  monthlyFee Int // paise
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  vehicles Vehicle[]
+
+  @@index([active])
+}
+
+model Vehicle {
+  id          String        @id @default(cuid())
+  userId      String
+  categoryId  String
+  number      String        @unique
+  status      VehicleStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category    VehicleCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  parkingFees ParkingFee[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model ParkingFee {
+  id         String           @id @default(cuid())
+  userId     String
+  vehicleId  String
+  month      Int // 1-12
+  year       Int
+  baseAmount Int // paise
+  lateFee    Int              @default(0) // paise, applied once overdue
+  amount     Int // paise, total payable (base + late fee)
+  status     ParkingFeeStatus @default(DUE)
+  dueDate    DateTime
+  paidAt     DateTime?
+  notes      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  payments Payment[]
+
+  @@unique([vehicleId, month, year], name: "unique_fee_per_vehicle_month")
+  @@index([status])
+  @@index([year, month])
+  @@index([dueDate])
+}
+
+model Payment {
+  id            String          @id @default(cuid())
+  parkingFeeId  String
+  provider      PaymentProvider
+  orderId       String          @unique // gateway order / QR reference
+  qrCodeId      String?         @unique
+  paymentId     String?         @unique // gateway transaction id, set on success
+  amount        Int // paise
+  currency      String          @default("INR")
+  status        PaymentStatus   @default(CREATED)
+  paymentMethod String?
+  vpa           String?
+  failureReason String?
+  expiresAt     DateTime?
+  paidAt        DateTime?
+  rawPayload    Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  parkingFee ParkingFee @relation(fields: [parkingFeeId], references: [id], onDelete: Restrict)
+
+  @@index([parkingFeeId])
+  @@index([status])
+  @@index([paidAt])
+}
+
+model WebhookEvent {
+  id          String          @id @default(cuid())
+  eventId     String          @unique
+  provider    PaymentProvider
+  type        String
+  payload     Json
+  processedAt DateTime?
+  result      String?
+  createdAt   DateTime        @default(now())
+}
+
+model ParkingSetting {
+  id          Int      @id @default(1)
+  dueDay      Int      @default(10)
+  lateFee     Int      @default(0) // paise, added once when a bill becomes overdue
+  feesEnabled Boolean  @default(true)
+  currency    String   @default("INR")
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      NotificationType
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  actorId     String?
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  description String
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([action])
+}

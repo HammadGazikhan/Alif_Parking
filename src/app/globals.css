@@ -1,26 +1,275 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* -------------------------------------------------------------------------
+ * Alif design tokens
+ * Derived from the Alif Cloud Consulting brand: near-black "ink" surfaces,
+ * Alif gold as the single accent, Montserrat, pill buttons, hairline borders.
+ * ---------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand */
+  --ink: #05070d;
+  --ink-2: #0b0e15;
+  --ink-3: #141824;
+  --gold: #eacb18;
+  --gold-hover: #f5d935;
+  --gold-strong: #8a7300; /* gold that passes contrast as text on white */
+  --gold-soft: #fbf5d6;
+
+  /* Surfaces */
+  --background: #f6f6f3;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+
+  /* Semantic */
+  --primary: var(--gold);
+  --primary-foreground: #0a0a0a;
+  --secondary: #f0f0ec;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f1f1ed;
+  --muted-foreground: #6b6b73;
+  --accent: #f6f2df;
+  --accent-foreground: #0a0a0a;
+  --destructive: #dc2626;
+  --border: #e6e5df;
+  --input: #dfded8;
+  --ring: #d9b90f;
+
+  /* Status */
+  --success: #15803d;
+  --success-soft: #ecf8f0;
+  --warning: #b45309;
+  --warning-soft: #fdf4e3;
+  --danger: #dc2626;
+  --danger-soft: #fdeeee;
+  --info: #1d4ed8;
+  --info-soft: #eef3fe;
+  --neutral-soft: #f1f1ee;
+
+  /* Charts */
+  --chart-1: #eacb18;
+  --chart-2: #141824;
+  --chart-3: #b8b6ad;
+  --chart-4: #15803d;
+  --chart-5: #dc2626;
+
+  /* Compact corners for controls and surfaces; circular status/avatar elements stay intentional. */
+  --radius: 0.25rem;
+
+  /* Sidebar (ink) */
+  --sidebar: var(--ink);
+  --sidebar-foreground: rgb(255 255 255 / 0.68);
+  --sidebar-primary: var(--gold);
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: rgb(255 255 255 / 0.06);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: var(--gold);
+
+  --shadow-soft: 0 1px 2px rgb(10 10 10 / 0.04), 0 8px 24px -12px rgb(10 10 10 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(10 10 10 / 0.04), 0 18px 40px -18px rgb(10 10 10 / 0.18);
+  --shadow-gold: 0 12px 32px -12px rgb(234 203 24 / 0.55);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-strong: var(--gold-strong);
+  --color-gold-soft: var(--gold-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral-soft: var(--neutral-soft);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1);
+  --radius-2xl: calc(var(--radius) * 1.25);
+  --radius-3xl: calc(var(--radius) * 1.5);
+  --radius-4xl: calc(var(--radius) * 2);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-gold: var(--shadow-gold);
+
+  --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pulse-ring: pulse-ring 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  --animate-scan: scan 2.6s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.7;
+    }
+    80%,
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+
+  @keyframes scan {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(calc(var(--scan-distance, 200px)));
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "tnum" 0;
+    text-rendering: optimizeLegibility;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: rgb(234 203 24 / 0.35);
+  }
+}
+
+@layer components {
+  /* Gold radial glow used on ink surfaces (sparingly) */
+  .ink-surface {
+    background-color: var(--ink);
+    background-image:
+      radial-gradient(circle at 18% 10%, rgb(234 203 24 / 0.14), transparent 32%),
+      radial-gradient(circle at 88% 12%, rgb(234 203 24 / 0.07), transparent 34%),
+      linear-gradient(135deg, rgb(255 255 255 / 0.04), transparent 42%);
+    color: #fff;
+  }
+
+  .glass-panel {
+    background-color: rgb(255 255 255 / 0.05);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Subtle parking-bay grid used behind brand visuals */
+  .bay-grid {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse at 30% 30%, #000 30%, transparent 75%);
+  }
+
+  .surface-card {
+    @apply rounded-xl border border-border bg-card shadow-soft;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eyebrow {
+    @apply text-[10px] font-semibold tracking-[0.2em] uppercase;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 12mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
 }
