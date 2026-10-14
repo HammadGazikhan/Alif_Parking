@@ -65,10 +65,9 @@ export async function requireAdminPage(): Promise<CurrentUser> {
   return user;
 }
 
+/** Employee self-service pages. Administrators may open them to pay their own fees. */
 export async function requireEmployeePage(): Promise<CurrentUser> {
-  const user = await requireUserPage();
-  if (user.role !== "EMPLOYEE") redirect(homePathFor(user.role));
-  return user;
+  return requireUserPage();
 }
 
 /* ----- API guards (throw) ----------------------------------------------- */
@@ -85,8 +84,7 @@ export async function requireApiAdmin(): Promise<CurrentUser> {
   return user;
 }
 
+/** Payment routes for the signed-in person's own fees, including administrators. */
 export async function requireApiEmployee(): Promise<CurrentUser> {
-  const user = await requireApiUser();
-  if (user.role !== "EMPLOYEE") throw new ForbiddenError();
-  return user;
+  return requireApiUser();
 }

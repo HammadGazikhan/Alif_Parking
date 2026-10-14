@@ -11,9 +11,9 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: proc
 const LATE_FEE = 5000;
 const DUE_DAY = 10;
 const CATEGORIES = [
-  { name: "Car", monthlyFee: 60000 },
-  { name: "Bike", monthlyFee: 30000 },
-  { name: "Scooter", monthlyFee: 30000 },
+  { name: "Car", monthlyFee: 30000 },
+  { name: "Bike", monthlyFee: 15000 },
+  { name: "Scooter", monthlyFee: 15000 },
   { name: "Other", monthlyFee: 50000 },
 ] as const;
 type CategoryName = (typeof CATEGORIES)[number]["name"];
@@ -127,13 +127,25 @@ async function main() {
     prisma.user.deleteMany(),
   ]);
 
-  const [admin] = await Promise.all(
-    ADMIN_EMAILS.map((email) =>
-      prisma.user.create({
-        data: { name: nameFromEmail(email), email, role: "ADMIN", parkingEligible: false, freePass: false },
+  const passByEmail = new Map(passList.map((person) => [person.email, person]));
+  const adminUsers = [];
+  for (const email of ADMIN_EMAILS) {
+    const person = passByEmail.get(email);
+    adminUsers.push(
+      await prisma.user.create({
+        data: {
+          name: person?.name || nameFromEmail(email),
+          email,
+          phone: person?.phone ?? null,
+          role: "ADMIN",
+          parkingEligible: true,
+          freePass: person?.freePass ?? false,
+        },
       }),
-    ),
-  );
+    );
+  }
+  const admin = adminUsers[0];
+  if (!admin) throw new Error("Set BOOTSTRAP_ADMIN_EMAILS before seeding.");
 
   await prisma.parkingSetting.create({
     data: { id: 1, dueDay: DUE_DAY, lateFee: LATE_FEE, feesEnabled: true, updatedById: admin.id },
@@ -149,32 +161,29 @@ async function main() {
 
   const admins = new Set(ADMIN_EMAILS);
   const usedNumbers = new Set<string>();
-  const skippedAdmins: string[] = [];
   let employees = 0;
   let vehicles = 0;
   let freePasses = 0;
 
   for (const person of passList) {
-    if (admins.has(person.email)) {
-      skippedAdmins.push(person.email);
-      continue;
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        name: person.name,
-        email: person.email,
-        phone: person.phone,
-        role: "EMPLOYEE",
-        status: "ACTIVE",
-        parkingEligible: true,
-        freePass: person.freePass,
-      },
-    });
+    const existingAdmin = admins.has(person.email) ? adminUsers.find((user) => user.email === person.email) : undefined;
+    const user =
+      existingAdmin ??
+      (await prisma.user.create({
+        data: {
+          name: person.name,
+          email: person.email,
+          phone: person.phone,
+          role: "EMPLOYEE",
+          status: "ACTIVE",
+          parkingEligible: true,
+          freePass: person.freePass,
+        },
+      }));
     employees += 1;
     if (person.freePass) freePasses += 1;
 
-    await prisma.auditLog.create({
+    if (!existingAdmin) await prisma.auditLog.create({
       data: {
         actorId: admin.id,
         action: "EMPLOYEE_CREATED",
@@ -214,7 +223,6 @@ async function main() {
   });
 
   console.log(`Seeded ${employees} employees (${freePasses} free pass), ${vehicles} vehicles, plus ${ADMIN_EMAILS.length} admin account(s).`);
-  if (skippedAdmins.length) console.log(`Skipped sheet rows for admin accounts: ${skippedAdmins.join(", ")}`);
   console.log(`Admins (sign in with Microsoft): ${ADMIN_EMAILS.join(", ")}`);
   console.log("No monthly fees were created. Generate them from Parking fees.");
 }

@@ -278,4 +278,20 @@ describe("late additions after the month was generated", () => {
     expect(await due(early.id)).toBe("2031-03-10T18:29:59.000Z");
     expect(await due(late.id)).toBe("2031-03-27T18:29:59.000Z");
   });
+
+  it("bills an administrator who is not on a free pass", async () => {
+    const admin = await createUser("ADMIN");
+    await createVehicle(admin.id);
+    expect((await generateMonthlyFees(admin, PERIOD.month, PERIOD.year)).created).toBe(1);
+    expect(await prisma.parkingFee.findFirst({ where: { userId: admin.id, ...PERIOD } })).toMatchObject({ amount: 50000 });
+  });
+
+  it("grants administrator access and refuses to remove the last or the signed-in administrator", async () => {
+    const admin = await createUser("ADMIN");
+    const employee = await createUser();
+    expect((await updateEmployee(admin, employee.id, { role: "ADMIN" })).role).toBe("ADMIN");
+    await expect(updateEmployee(admin, admin.id, { role: "EMPLOYEE" })).rejects.toThrow(/own administrator access/);
+    expect((await updateEmployee(admin, employee.id, { role: "EMPLOYEE" })).role).toBe("EMPLOYEE");
+    await expect(updateEmployee(employee, admin.id, { role: "EMPLOYEE" })).rejects.toThrow(/last administrator/);
+  });
 });

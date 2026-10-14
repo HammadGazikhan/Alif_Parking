@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { PASS_LIST_COMPANY, PASS_LIST_LOCATION, PASS_LIST_NOTES, PASS_LIST_UNIT_NO } from "@/lib/constants";
 import { currentPeriod, monthName } from "@/lib/dates";
 import { prisma } from "@/server/db";
+import { ValidationError } from "@/server/errors";
 import {
   blockStatus,
   buildPassListWorkbook,
@@ -12,6 +13,7 @@ import {
   splitName,
   vehicleTypeFor,
 } from "@/server/services/pass-list.service";
+import { assertPeriodHasFees, assertReportHasFees, listFeePeriods } from "@/server/services/report.service";
 import { createFee, createUser, createVehicle, resetDb } from "./fixtures";
 
 describe("pass list helpers", () => {
@@ -109,27 +111,27 @@ describe("buildPassListWorkbook", () => {
 
     expect(ws!.getCell("B10").value).toBe(PASS_LIST_LOCATION);
     expect(ws!.getCell("F10").value).toBe(PASS_LIST_COMPANY);
-    expect(ws!.getCell("C10").value).toBe("MH12AB1234");
-    expect(ws!.getCell("E10").value).toBe("4W");
-    expect(ws!.getCell("C11").value).toBe("MH12CD5678");
-    expect(ws!.getCell("E11").value).toBe("2W");
-    expect(ws!.getCell("K10").value).toBe("Y");
-    expect(ws!.getCell("L10").value).toBe(900);
-    expect(ws!.getCell("M10").value).toBe("CASH");
-    expect(fillOf(ws!.getCell("H10"))).toBe("FFA9D08E");
+    expect(ws!.getCell("K10").value).toBe("FREE");
+    expect(ws!.getCell("L10").value).toBe(0);
+    expect(ws!.getCell("M10").value).toBe("FREE");
+    expect(ws!.getCell("C10").value).toBe("MH12GH0140");
+    expect(ws!.getCell("D10").value).toBe("0140");
+    expect(fillOf(ws!.getCell("B10"))).toBe("FFFFFF00");
 
-    expect(String(ws!.model.merges ?? [])).toContain("A10:A11");
+    expect(ws!.getCell("C11").value).toBe("MH12AB1234");
+    expect(ws!.getCell("E11").value).toBe("4W");
+    expect(ws!.getCell("C12").value).toBe("MH12CD5678");
+    expect(ws!.getCell("E12").value).toBe("2W");
+    expect(ws!.getCell("K11").value).toBe("Y");
+    expect(ws!.getCell("L11").value).toBe(900);
+    expect(ws!.getCell("M11").value).toBe("CASH");
+    expect(fillOf(ws!.getCell("H11"))).toBe("FFA9D08E");
 
-    expect(ws!.getCell("K12").value).toBe("N");
-    expect(ws!.getCell("L12").value).toBe(0);
-    expect(fillOf(ws!.getCell("B12"))).toBe("FFFF0000");
+    expect(String(ws!.model.merges ?? [])).toContain("A11:A12");
 
-    expect(ws!.getCell("K13").value).toBe("FREE");
+    expect(ws!.getCell("K13").value).toBe("N");
     expect(ws!.getCell("L13").value).toBe(0);
-    expect(ws!.getCell("M13").value).toBe("FREE");
-    expect(ws!.getCell("C13").value).toBe("MH12GH0140");
-    expect(ws!.getCell("D13").value).toBe("0140");
-    expect(fillOf(ws!.getCell("B13"))).toBe("FFFFFF00");
+    expect(fillOf(ws!.getCell("B13"))).toBe("FFFF0000");
 
     const total = ws!.getCell("L16");
     expect(total.formula || (typeof total.value === "object" && total.value && "formula" in total.value ? total.value.formula : "")).toBe(
@@ -138,5 +140,26 @@ describe("buildPassListWorkbook", () => {
     expect(ws!.getCell("K16").value).toBe("Total");
     expect(ws!.getCell("C18").value).toBe("Note:");
     expect(ws!.getCell("C19").value).toBe(PASS_LIST_NOTES[0]);
+  });
+});
+
+describe("fee month export guard", () => {
+  beforeEach(() => resetDb());
+
+  it("lists only months that have fees and rejects the rest", async () => {
+    const period = currentPeriod();
+    const user = await createUser();
+    const vehicle = await createVehicle(user.id);
+    await createFee(user.id, vehicle.id);
+
+    await expect(listFeePeriods()).resolves.toEqual([period]);
+    await expect(assertPeriodHasFees(period.month, period.year)).resolves.toBeUndefined();
+    await expect(assertPeriodHasFees(period.month === 1 ? 12 : period.month - 1, period.month === 1 ? period.year - 1 : period.year)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    await expect(assertReportHasFees({ from: "1999-01", to: "1999-02" })).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      assertReportHasFees({ from: `${period.year}-${String(period.month).padStart(2, "0")}`, to: `${period.year}-${String(period.month).padStart(2, "0")}` }),
+    ).resolves.toBeUndefined();
   });
 });

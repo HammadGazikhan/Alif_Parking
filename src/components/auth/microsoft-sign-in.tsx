@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { microsoftSignInAction } from "@/app/actions/auth";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  "not-registered": "Your Microsoft account isn't registered in the parking portal. Ask the parking administrator to add you.",
-  inactive: "Your portal access has been deactivated. Contact the parking administrator.",
+  "not-registered": "Your Microsoft account isn't registered in the parking fee portal. Ask an administrator to add you.",
+  inactive: "Your portal access has been deactivated. Contact an administrator.",
   "no-email": "Microsoft didn't share an email address for your account, so we couldn't match it to the portal.",
   "wrong-tenant": "Please sign in with your Alif work account.",
   AccessDenied: "Access was denied. Please sign in with your Alif work account.",
@@ -50,7 +50,9 @@ export function MicrosoftSignIn({
     <div className="w-full max-w-[400px] animate-fade-up">
       <p className="eyebrow text-gold-strong">Alif internal</p>
       <h1 className="mt-3 text-3xl font-bold tracking-tight">Welcome back</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Sign in to Alif Parking Portal with your work account.</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Sign in with your Alif work account to view and pay parking fees.
+      </p>
 
       <div className="mt-8 space-y-5">
         {message ? (
@@ -70,7 +72,7 @@ export function MicrosoftSignIn({
         </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Only Alif employees registered by the parking administrator can sign in.
+          Only Alif employees added by an administrator can sign in.
         </p>
       </div>
     </div>

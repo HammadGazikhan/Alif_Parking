@@ -24,7 +24,7 @@ export async function resolveSsoUser(rawEmail: string | null | undefined, name?:
     if (!isBootstrapAdmin) return { ok: false, reason: "not-registered" };
     const created = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { email, name: name?.trim() || email.split("@")[0]!, role: "ADMIN", parkingEligible: false, lastLoginAt: now },
+        data: { email, name: name?.trim() || email.split("@")[0]!, role: "ADMIN", parkingEligible: true, lastLoginAt: now },
         select: { id: true, role: true, name: true },
       });
       await logAudit(

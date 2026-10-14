@@ -7,6 +7,7 @@ import { paginate, skipTake } from "@/server/services/pagination";
 import { ConflictError, NotFoundError, ValidationError, isUniqueConstraintError } from "@/server/errors";
 import { directoryPhotoForEmail, excludeRegistered, searchDirectoryUsers, type DirectoryPerson } from "@/server/directory/graph";
 import type { CurrentUser } from "@/server/auth/guards";
+import { ROSTER_ROLES } from "@/lib/constants";
 import type { EmployeeCreateInput, EmployeeListQuery, EmployeeUpdateInput } from "@/lib/validations/employee";
 
 const DIRECTORY_RESULT_LIMIT = 20;
@@ -18,6 +19,7 @@ const employeeListSelect = {
   phone: true,
   designation: true,
   avatarType: true,
+  role: true,
   status: true,
   parkingEligible: true,
   freePass: true,
@@ -34,7 +36,7 @@ export type EmployeeListItem = Prisma.UserGetPayload<{ select: typeof employeeLi
 
 export async function listEmployees(query: EmployeeListQuery) {
   const where: Prisma.UserWhereInput = {
-    role: "EMPLOYEE",
+    role: { in: [...ROSTER_ROLES] },
     ...(query.status ? { status: query.status } : {}),
     ...(query.parkingEligible !== undefined ? { parkingEligible: query.parkingEligible } : {}),
     ...(query.hasVehicle === true ? { vehicles: { some: { status: "ACTIVE" } } } : {}),
@@ -63,7 +65,7 @@ export async function listEmployees(query: EmployeeListQuery) {
 
 export async function listEmployeeOptions() {
   return prisma.user.findMany({
-    where: { role: "EMPLOYEE" },
+    where: { role: { in: [...ROSTER_ROLES] } },
     select: { id: true, name: true, email: true, status: true },
     orderBy: { name: "asc" },
   });
@@ -71,7 +73,7 @@ export async function listEmployeeOptions() {
 
 export async function getEmployee(id: string) {
   const employee = await prisma.user.findFirst({
-    where: { id, role: "EMPLOYEE" },
+    where: { id, role: { in: [...ROSTER_ROLES] } },
     select: {
       id: true,
       name: true,
@@ -79,6 +81,7 @@ export async function getEmployee(id: string) {
       phone: true,
       designation: true,
       avatarType: true,
+      role: true,
       status: true,
       parkingEligible: true,
       freePass: true,
@@ -173,8 +176,23 @@ export async function createEmployee(actor: CurrentUser, input: EmployeeCreateIn
 }
 
 export async function updateEmployee(actor: CurrentUser, id: string, input: EmployeeUpdateInput) {
-  const existing = await prisma.user.findFirst({ where: { id, role: "EMPLOYEE" } });
+  const existing = await prisma.user.findFirst({ where: { id, role: { in: [...ROSTER_ROLES] } } });
   if (!existing) throw new NotFoundError("Employee");
+
+  const demoting = input.role === "EMPLOYEE" && existing.role === "ADMIN";
+  if (demoting && id === actor.id) {
+    throw new ValidationError("You cannot remove your own administrator access.", {
+      role: "You cannot remove your own administrator access.",
+    });
+  }
+  if (demoting) {
+    const admins = await prisma.user.count({ where: { role: "ADMIN" } });
+    if (admins <= 1) {
+      throw new ValidationError("The last administrator cannot be demoted.", {
+        role: "The last administrator cannot be demoted.",
+      });
+    }
+  }
 
   const data: Prisma.UserUpdateInput = {
     ...(input.name !== undefined ? { name: input.name } : {}),
@@ -183,20 +201,22 @@ export async function updateEmployee(actor: CurrentUser, id: string, input: Empl
     ...(input.parkingEligible !== undefined ? { parkingEligible: input.parkingEligible } : {}),
     ...(input.freePass !== undefined ? { freePass: input.freePass } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.role !== undefined ? { role: input.role } : {}),
   };
 
   const changed = Object.keys(data).filter(
     (k) => (existing as Record<string, unknown>)[k] !== (data as Record<string, unknown>)[k],
   );
 
-  const result: { id: string; name: string; email: string; status: UserStatus; parkingEligible: boolean; freePass: boolean } =
+  const result: { id: string; name: string; email: string; role: "ADMIN" | "EMPLOYEE"; status: UserStatus; parkingEligible: boolean; freePass: boolean } =
     await prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
         where: { id },
         data,
-        select: { id: true, name: true, email: true, status: true, parkingEligible: true, freePass: true },
+        select: { id: true, name: true, email: true, role: true, status: true, parkingEligible: true, freePass: true },
       });
       const statusChanged = input.status !== undefined && input.status !== existing.status;
+      const roleChanged = input.role !== undefined && input.role !== existing.role;
       await logAudit(
         {
           actorId: actor.id,
@@ -207,9 +227,13 @@ export async function updateEmployee(actor: CurrentUser, id: string, input: Empl
             : "EMPLOYEE_UPDATED",
           entityType: "Employee",
           entityId: updated.email,
-          description: statusChanged
-            ? `${input.status === "ACTIVE" ? "Activated" : "Deactivated"} employee ${updated.name}`
-            : `Updated employee ${updated.name}`,
+          description: roleChanged
+            ? input.role === "ADMIN"
+              ? `Granted administrator access to ${updated.name}`
+              : `Removed administrator access from ${updated.name}`
+            : statusChanged
+              ? `${input.status === "ACTIVE" ? "Activated" : "Deactivated"} employee ${updated.name}`
+              : `Updated employee ${updated.name}`,
           metadata: { userId: id, fields: changed },
         },
         tx,

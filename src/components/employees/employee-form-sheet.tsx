@@ -33,6 +33,7 @@ export type EditableEmployee = {
   parkingEligible: boolean;
   freePass: boolean;
   status: "ACTIVE" | "INACTIVE";
+  role: "ADMIN" | "EMPLOYEE";
 };
 
 type CreateResult = { employee: { id: string; name: string } };
@@ -47,6 +48,7 @@ function toDefaults(employee?: EditableEmployee): EmployeeFormValues {
     parkingEligible: employee?.parkingEligible ?? true,
     freePass: employee?.freePass ?? false,
     status: employee?.status ?? "ACTIVE",
+    role: employee?.role ?? "EMPLOYEE",
   };
 }
 
@@ -194,6 +196,30 @@ export function EmployeeFormSheet({
               />
             </FormField>
           </div>
+
+          {isEdit ? (
+            <Controller
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3">
+                  <span>
+                    <span className="block text-sm font-semibold">Administrator</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Administrators manage the portal and still pay parking fees unless they have a free pass.
+                    </span>
+                    {errors.role?.message ? (
+                      <span className="mt-1 block text-xs text-danger">{errors.role.message}</span>
+                    ) : null}
+                  </span>
+                  <Switch
+                    checked={field.value === "ADMIN"}
+                    onCheckedChange={(checked) => field.onChange(checked ? "ADMIN" : "EMPLOYEE")}
+                  />
+                </label>
+              )}
+            />
+          ) : null}
 
           <Controller
             control={form.control}

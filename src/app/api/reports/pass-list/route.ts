@@ -4,10 +4,12 @@ import { requireApiAdmin } from "@/server/auth/guards";
 import { prisma } from "@/server/db";
 import { parseQuery, route } from "@/server/http";
 import { buildPassListWorkbook } from "@/server/services/pass-list.service";
+import { assertPeriodHasFees } from "@/server/services/report.service";
 
 export const GET = route(async (req) => {
   const admin = await requireApiAdmin();
   const query = parseQuery(req, passListQuerySchema);
+  await assertPeriodHasFees(query.month, query.year);
   const record = await prisma.user.findUnique({ where: { id: admin.id }, select: { phone: true } });
   const buffer = await buildPassListWorkbook(query, { name: admin.name, phone: record?.phone ?? null });
   const filename = `Parking ${monthName(query.month)} ${query.year}.xlsx`;

@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  Download,
   FlaskConical,
   Loader2,
   ReceiptText,
@@ -59,6 +58,7 @@ function useCountdown(expiresAt: string | null) {
 export function PayCheckout({ fee, simulate }: { fee: CheckoutFee; simulate: boolean }) {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const started = useRef(false);
+  const forceReconcile = useRef(false);
 
   const createOrder = useMutation({
     mutationFn: () => api<CheckoutView>("/api/payments/create-order", { method: "POST", body: { feeId: fee.id } }),
@@ -67,7 +67,14 @@ export function PayCheckout({ fee, simulate }: { fee: CheckoutFee; simulate: boo
 
   const status = useQuery({
     queryKey: ["payment", paymentId],
-    queryFn: () => api<CheckoutView>(`/api/payments/${paymentId}`, { cache: "no-store" }),
+    queryFn: () => {
+      const reconcile = forceReconcile.current;
+      forceReconcile.current = false;
+      return api<CheckoutView>(`/api/payments/${paymentId}`, {
+        cache: "no-store",
+        query: reconcile ? { reconcile: "1" } : undefined,
+      });
+    },
     enabled: !!paymentId,
     initialData: createOrder.data?.id === paymentId ? createOrder.data : undefined,
     refetchInterval: (q) => {
@@ -87,6 +94,11 @@ export function PayCheckout({ fee, simulate }: { fee: CheckoutFee; simulate: boo
     started.current = true;
     createOrder.mutate();
   }, [createOrder]);
+
+  const refreshNow = useCallback(() => {
+    forceReconcile.current = true;
+    void status.refetch();
+  }, [status]);
 
   const view = status.data ?? createOrder.data;
 
@@ -136,7 +148,7 @@ export function PayCheckout({ fee, simulate }: { fee: CheckoutFee; simulate: boo
       fee={fee}
       view={view}
       checking={status.isFetching}
-      onCheck={() => status.refetch()}
+      onCheck={refreshNow}
       onRegenerate={start}
       regenerating={createOrder.isPending}
       simulate={simulate}
@@ -166,11 +178,9 @@ function PendingCheckout({
   const upiQuery = view.upiUri?.split("?")[1];
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_420px] lg:items-start">
-      <FeeSummary fee={fee} className="order-2 lg:order-1" />
-
-      <section className="surface-card order-1 overflow-hidden lg:order-2 animate-fade-up">
-        <div className="ink-surface px-5 pt-5 pb-6 text-center text-white sm:px-6">
+    <div className="mx-auto grid w-full max-w-4xl gap-5 lg:grid-cols-2 lg:items-start">
+      <div className="order-2 space-y-5 lg:order-1">
+        <div className="ink-surface rounded-2xl px-5 py-5 text-white sm:px-6">
           <p className="eyebrow text-gold">Scan to pay</p>
           <p className="mt-2 text-4xl font-bold tracking-tight tabular">{formatINR(view.amount)}</p>
           <p className="mt-1 text-xs text-white/60">
@@ -178,51 +188,19 @@ function PendingCheckout({
           </p>
         </div>
 
-        <div className="-mt-3 px-5 pb-5 sm:px-6">
-          <div className="relative mx-auto w-full max-w-[280px] rounded-3xl border border-border bg-white p-4 shadow-lift">
-            {view.qrImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={view.qrImageUrl}
-                alt={`UPI QR code for ${formatINR(view.amount)}`}
-                className={cn("aspect-square w-full rounded-xl transition", expired && "opacity-15 blur-[2px]")}
-              />
-            ) : (
-              <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
-                QR unavailable
-              </div>
-            )}
-            {!expired ? (
-              <span className="pointer-events-none absolute inset-x-6 top-6 h-0.5 rounded-full bg-gold/80 shadow-[0_0_12px_var(--gold)] animate-scan" aria-hidden />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-                <p className="text-sm font-semibold">This QR has expired</p>
-                <Button size="sm" onClick={onRegenerate} disabled={regenerating}>
-                  {regenerating ? <Loader2 className="animate-spin" /> : <RefreshCw />} New QR
-                </Button>
-              </div>
-            )}
-          </div>
+        <FeeSummary fee={fee} />
 
-          <div className="mt-4 flex items-center justify-center gap-3 text-xs">
-            <span className="flex items-center gap-2 font-medium text-foreground" role="status" aria-live="polite">
-              <span className="relative flex size-2.5">
-                <span className="absolute inline-flex size-full rounded-full bg-gold opacity-75 animate-pulse-ring" />
-                <span className="relative inline-flex size-2.5 rounded-full bg-gold" />
-              </span>
-              Waiting for payment…
-            </span>
-            {remaining !== null && !expired ? (
-              <span className="flex items-center gap-1 text-muted-foreground tabular">
-                <Clock className="size-3.5" />
-                {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}
-              </span>
-            ) : null}
-          </div>
-
+        <div className="space-y-4">
+          {view.checkout ? <PayOnThisPhone view={view} disabled={expired} onPaid={onCheck} /> : null}
+          {view.upiUri ? (
+            <Button variant="ink" className="w-full lg:hidden" asChild>
+              <a href={view.upiUri}>
+                <Smartphone /> Open UPI app
+              </a>
+            </Button>
+          ) : null}
           {upiQuery ? (
-            <div className="mt-5 lg:hidden">
-              <p className="mb-2 text-center text-xs font-semibold text-muted-foreground">Or pay with an app on this phone</p>
+            <div className="lg:hidden">
               <div className="grid grid-cols-4 gap-2">
                 {UPI_APPS.map((app) => (
                   <a
@@ -239,47 +217,109 @@ function PendingCheckout({
               </div>
             </div>
           ) : null}
-
-          <div className="mt-5 hidden flex-wrap justify-center gap-1.5 lg:flex">
-            {UPI_APPS.map((app) => (
-              <span key={app.name} className="rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                {app.name}
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-2 font-medium text-foreground" role="status" aria-live="polite">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex size-full rounded-full bg-gold opacity-75 animate-pulse-ring" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-gold" />
               </span>
-            ))}
-            <span className="rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-              Any UPI app
+              Waiting for payment…
             </span>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            {view.upiUri ? (
-              <Button variant="ink" className="lg:hidden" asChild>
-                <a href={view.upiUri}>
-                  <Smartphone /> Open UPI app
-                </a>
-              </Button>
+            {remaining !== null && !expired ? (
+              <span className="flex items-center gap-1 text-muted-foreground tabular">
+                <Clock className="size-3.5" />
+                {String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}
+              </span>
             ) : null}
-            {view.qrImageUrl ? (
-              <Button variant="outline" asChild className={cn(!view.upiUri && "col-span-2", "lg:col-span-1")}>
-                <a href={view.qrImageUrl} download={`alif-parking-${view.fee.period.replace(" ", "-")}.png`} target="_blank" rel="noreferrer">
-                  <Download /> Save QR
-                </a>
-              </Button>
-            ) : null}
-            <Button variant="outline" onClick={onCheck} disabled={checking} className="col-span-2 lg:col-span-1">
-              {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />} I&apos;ve paid — check status
-            </Button>
           </div>
-
-          <p className="mt-4 flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
+          <Button variant="outline" className="w-full" onClick={onCheck} disabled={checking}>
+            {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />} I&apos;ve paid — check status
+          </Button>
+          <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
             <ShieldCheck className="mt-px size-3.5 shrink-0 text-success" />
             Your payment is confirmed directly by the payment gateway. This page updates automatically — please don&apos;t pay twice.
           </p>
-
           {simulate ? <SimulatePanel paymentId={view.id} onDone={onCheck} /> : null}
+        </div>
+      </div>
+
+      <section className="surface-card order-1 overflow-hidden lg:order-2 animate-fade-up">
+        <div className="relative bg-white">
+            {view.qrImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={view.qrImageUrl}
+                alt={`UPI QR code for ${formatINR(view.amount)}`}
+                className={cn("block h-auto w-full", expired && "opacity-15 blur-[2px]")}
+              />
+            ) : (
+              <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">QR unavailable</div>
+            )}
+            {!expired ? (
+              <div className="pointer-events-none absolute inset-x-[22%] top-[31%] h-[34%] overflow-hidden" aria-hidden>
+                <span
+                  className="absolute inset-x-0 top-0 block h-full animate-scan"
+                  style={{ ["--scan-distance" as string]: "calc(100% - 2px)" }}
+                >
+                  <span className="absolute inset-x-0 top-0 h-0.5 rounded-full bg-gold/90 shadow-[0_0_12px_var(--gold)]" />
+                </span>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/80 p-6 text-center">
+                <p className="text-sm font-semibold">This QR has expired</p>
+                <Button size="sm" onClick={onRegenerate} disabled={regenerating}>
+                  {regenerating ? <Loader2 className="animate-spin" /> : <RefreshCw />} New QR
+                </Button>
+              </div>
+            )}
         </div>
       </section>
     </div>
+  );
+}
+
+function loadCheckout(): Promise<void> {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Razorpay Checkout could not be loaded."));
+    document.body.appendChild(script);
+  });
+}
+
+function PayOnThisPhone({ view, disabled, onPaid }: { view: CheckoutView; disabled: boolean; onPaid: () => void }) {
+  const [opening, setOpening] = useState(false);
+  const checkout = view.checkout;
+  if (!checkout) return null;
+
+  async function pay() {
+    setOpening(true);
+    try {
+      await loadCheckout();
+      if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded.");
+      new window.Razorpay({
+        key: checkout.keyId,
+        amount: view.amount,
+        currency: view.currency,
+        name: "Alif Parking Fees",
+        description: `${view.fee.period} · ${view.fee.vehicleNumber}`,
+        order_id: checkout.orderId,
+        handler: () => onPaid(),
+        theme: { color: "#111111" },
+      }).open();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  return (
+    <Button variant="ink" className="w-full lg:hidden" onClick={pay} disabled={disabled || opening}>
+      {opening ? <Loader2 className="animate-spin" /> : <Smartphone />} Pay on this phone
+    </Button>
   );
 }
 
@@ -315,7 +355,25 @@ function SimulatePanel({ paymentId, onDone }: { paymentId: string; onDone: () =>
   );
 }
 
+function useIsDesktop() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const media = window.matchMedia("(min-width: 1024px)");
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(min-width: 1024px)").matches,
+    () => false,
+  );
+}
+
 function FeeSummary({ fee, className }: { fee: CheckoutFee; className?: string }) {
+  const isDesktop = useIsDesktop();
+  const steps = [
+    "Scan the QR on this page with another phone",
+    ...(isDesktop ? [] : ["Or tap Pay on this phone for UPI, card, or netbanking"]),
+    "Approve the payment",
+  ];
   const rows = [
     { label: "Billing period", value: fee.period },
     { label: "Vehicle", value: <span className="font-mono font-semibold">{fee.vehicleNumber}</span> },
@@ -338,10 +396,10 @@ function FeeSummary({ fee, className }: { fee: CheckoutFee; className?: string }
         </div>
       </dl>
       <ol className="mt-6 space-y-3 text-sm">
-        {["Open any UPI app on your phone", "Scan the QR code or tap your app", "Approve the payment with your UPI PIN"].map((step, i) => (
+        {steps.map((step, index) => (
           <li key={step} className="flex items-center gap-3">
             <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold-soft text-[11px] font-bold text-gold-strong">
-              {i + 1}
+              {index + 1}
             </span>
             <span className="text-muted-foreground">{step}</span>
           </li>
@@ -426,7 +484,7 @@ function StateCard({
 
 function CheckoutSkeleton({ fee }: { fee: CheckoutFee }) {
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_420px] lg:items-start">
+    <div className="mx-auto grid w-full max-w-4xl gap-5 lg:grid-cols-2 lg:items-start">
       <FeeSummary fee={fee} className="order-2 lg:order-1" />
       <section className="surface-card order-1 overflow-hidden lg:order-2">
         <div className="ink-surface px-6 pt-5 pb-6 text-center text-white">

@@ -18,7 +18,7 @@ export function AlifMark({ className }: { className?: string }) {
 export function AlifLogo({
   className,
   tone = "light",
-  subtitle = "Parking Portal",
+  subtitle = "Parking Fees",
 }: {
   className?: string;
   tone?: "light" | "dark";

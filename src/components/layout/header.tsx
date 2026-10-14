@@ -19,9 +19,11 @@ export function Header({ user }: { user: ShellUser }) {
   const visible = crumbs.slice(1);
   const current = visible.at(-1)?.label ?? "Dashboard";
 
+  const parents = visible.slice(0, -1);
+
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl no-print">
-      <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 border-b border-border bg-background no-print">
+      <div className="relative flex h-14 items-center gap-3 px-4 sm:px-6">
         <Sheet open={open} onOpenChange={setOpen}>
           <Button
             variant="ghost"
@@ -38,25 +40,23 @@ export function Header({ user }: { user: ShellUser }) {
           </SheetContent>
         </Sheet>
 
-        <div className="min-w-0 flex-1">
-          <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
-            {visible.map((c, i) => (
-              <span key={c.href} className="flex items-center gap-1">
-                {i > 0 ? <ChevronRight className="size-3 text-muted-foreground/60" /> : null}
-                {i < visible.length - 1 ? (
+        <div className="min-w-0">
+          {parents.length > 0 ? (
+            <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:flex">
+              {parents.map((c, i) => (
+                <span key={c.href} className="flex items-center gap-1">
+                  {i > 0 ? <ChevronRight className="size-3 opacity-60" /> : null}
                   <Link href={c.href} className="transition-colors hover:text-foreground">
                     {c.label}
                   </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{c.label}</span>
-                )}
-              </span>
-            ))}
-          </nav>
-          <p className="truncate text-sm font-semibold sm:hidden">{current}</p>
+                </span>
+              ))}
+            </nav>
+          ) : null}
+          <h1 className="truncate text-sm font-semibold tracking-tight">{current}</h1>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="ml-auto flex items-center gap-1">
           <CommandMenu role={user.role} />
           <NotificationBell />
           <UserMenu user={user} />

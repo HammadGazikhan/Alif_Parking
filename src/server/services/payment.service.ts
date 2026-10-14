@@ -12,6 +12,7 @@ import type { PaymentListQuery } from "@/lib/validations/payment";
 import { formatBillingPeriod } from "@/lib/dates";
 import { PAYMENT_QR_TTL_MINUTES } from "@/lib/constants";
 import { normalizeVehicleNumber } from "@/lib/vehicle";
+import { env } from "@/server/env";
 
 const RECONCILE_AFTER_MS = 20_000;
 const REUSE_MIN_REMAINING_MS = 90_000;
@@ -50,6 +51,10 @@ export function toCheckoutView(payment: PaymentWithFee) {
     paymentMethod: payment.paymentMethod,
     failureReason: payment.failureReason,
     ...(isOpen ? displayOf(payment) : { qrImageUrl: null, upiUri: null }),
+    checkout:
+      isOpen && payment.provider === "RAZORPAY" && payment.orderId.startsWith("order_")
+        ? { keyId: env().RAZORPAY_KEY_ID, orderId: payment.orderId }
+        : null,
     fee: {
       id: fee.id,
       month: fee.month,
@@ -97,7 +102,7 @@ export async function createPaymentOrder(user: CurrentUser, feeId: string): Prom
         },
         orderBy: { createdAt: "desc" },
       });
-      if (reusable) return reusable.id;
+      if (reusable && (gateway.id !== "RAZORPAY" || reusable.orderId.startsWith("order_"))) return reusable.id;
 
       const stale = await tx.payment.findMany({
         where: { parkingFeeId: fee.id, status: { in: ["CREATED", "PENDING"] } },
@@ -168,7 +173,11 @@ async function loadPaymentFor(user: CurrentUser, paymentId: string) {
  * the gateway (server-to-server) when stale or expired, so a delayed webhook
  * never leaves an employee stuck. The client never decides the outcome.
  */
-export async function getPaymentStatus(user: CurrentUser, paymentId: string): Promise<CheckoutView> {
+export async function getPaymentStatus(
+  user: CurrentUser,
+  paymentId: string,
+  options?: { reconcile?: boolean },
+): Promise<CheckoutView> {
   let payment = await loadPaymentFor(user, paymentId);
   const isOpen = payment.status === "PENDING" || payment.status === "CREATED";
   if (!isOpen) return toCheckoutView(payment);
@@ -177,7 +186,7 @@ export async function getPaymentStatus(user: CurrentUser, paymentId: string): Pr
   const expired = payment.expiresAt ? payment.expiresAt.getTime() < now : false;
   const stale = now - payment.updatedAt.getTime() > RECONCILE_AFTER_MS;
 
-  if (expired || stale) {
+  if (expired || stale || options?.reconcile) {
     const gateway = gatewayFor(payment.provider);
     const success = await gateway
       .fetchSuccessfulPayment({ orderId: payment.orderId, qrCodeId: payment.qrCodeId })

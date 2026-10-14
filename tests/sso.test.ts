@@ -43,7 +43,7 @@ describe("resolveSsoUser", () => {
     const result = await resolveSsoUser("Hammad.G@AligConsulting.com", "Hammad G");
     expect(result.ok && result.user.role).toBe("ADMIN");
     const user = await prisma.user.findUniqueOrThrow({ where: { email: BOOTSTRAP } });
-    expect(user).toMatchObject({ name: "Hammad G", role: "ADMIN", parkingEligible: false, status: "ACTIVE" });
+    expect(user).toMatchObject({ name: "Hammad G", role: "ADMIN", parkingEligible: true, status: "ACTIVE" });
     expect(await prisma.auditLog.count({ where: { action: "EMPLOYEE_CREATED", entityId: BOOTSTRAP } })).toBe(1);
   });
 

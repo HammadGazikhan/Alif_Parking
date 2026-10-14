@@ -43,10 +43,12 @@ describe("vehicle numbers", () => {
     await expect(updateVehicle(admin, other.id, { number: "MH12AB1234" })).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it("only assigns vehicles to employees", async () => {
+  it("assigns a vehicle to an administrator and rejects an unknown owner", async () => {
     const admin = await createUser("ADMIN");
     const car = await categoryByName("Car");
-    await expect(createVehicle(admin, form(admin.id, "KA01AA0001", car.id))).rejects.toBeInstanceOf(ValidationError);
+    const vehicle = await createVehicle(admin, form(admin.id, "KA01AA0001", car.id));
+    expect(vehicle.userId).toBe(admin.id);
+    await expect(createVehicle(admin, form("missing-user", "KA01AA0002", car.id))).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("rejects an inactive category for an active vehicle", async () => {

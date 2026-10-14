@@ -108,7 +108,7 @@ async function loadBlocks(month: number, year: number): Promise<Block[]> {
       },
     }),
     prisma.user.findMany({
-      where: { role: "EMPLOYEE", status: "ACTIVE", freePass: true, vehicles: { some: { status: "ACTIVE" } } },
+      where: { role: { in: ["ADMIN", "EMPLOYEE"] }, status: "ACTIVE", freePass: true, vehicles: { some: { status: "ACTIVE" } } },
       select: {
         id: true,
         name: true,
@@ -154,7 +154,7 @@ async function loadBlocks(month: number, year: number): Promise<Block[]> {
 
   return [...blocks.values()]
     .filter((block) => block.vehicles.length > 0)
-    .sort((a, b) => a.name.localeCompare(b.name, "en"))
+    .sort((a, b) => Number(b.freePass) - Number(a.freePass) || a.name.localeCompare(b.name, "en"))
     .map((block) => ({ ...block, vehicles: [...block.vehicles].sort((a, b) => a.number.localeCompare(b.number)) }));
 }
 

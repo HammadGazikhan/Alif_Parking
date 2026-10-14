@@ -1,4 +1,7 @@
 export const APP_NAME = "Alif Parking Portal";
+
+/** Portal accounts that can hold a vehicle and be billed. Administrators are included. */
+export const ROSTER_ROLES = ["ADMIN", "EMPLOYEE"] as const;
 export const COMPANY_NAME = "Alif Cloud Consulting";
 
 /** Fixed header text copied from the Clover Hills Plaza pass list. */

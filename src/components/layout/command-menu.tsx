@@ -54,23 +54,19 @@ export function CommandMenu({ role }: { role: Role }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground shadow-soft transition-colors hover:border-foreground/15 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:w-64"
+        className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:absolute md:top-1/2 md:left-1/2 md:h-9 md:w-full md:max-w-xs md:-translate-x-1/2 md:-translate-y-1/2 md:justify-start md:gap-2 md:bg-muted md:px-3 md:text-sm xl:max-w-sm"
         aria-label="Search"
       >
-        <Search className="size-4" />
-        <span className="hidden flex-1 text-left md:inline">{role === "ADMIN" ? "Search employees, pages…" : "Search…"}</span>
-        <kbd className="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] md:inline">
+        <Search className="size-4 shrink-0" />
+        <span className="hidden flex-1 text-left md:inline">Search</span>
+        <kbd className="hidden rounded-md bg-background px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted-foreground md:inline">
           Ctrl K
         </kbd>
       </button>
-      <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Search pages and employees">
-        <CommandInput
-          placeholder={role === "ADMIN" ? "Search employees by name, email or vehicle…" : "Jump to…"}
-          value={query}
-          onValueChange={setQuery}
-        />
+      <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Find a person or a page">
+        <CommandInput placeholder="Name, email, or page" value={query} onValueChange={setQuery} />
         <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandEmpty>Nothing matches that.</CommandEmpty>
           {employees?.items.length ? (
             <CommandGroup heading="Employees">
               {employees.items.map((e) => (

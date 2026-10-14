@@ -6,19 +6,20 @@ import { messages, notify } from "@/server/services/notification.service";
 import { getSettings } from "@/server/services/settings.service";
 import { ValidationError } from "@/server/errors";
 import type { CurrentUser } from "@/server/auth/guards";
+import { ROSTER_ROLES } from "@/lib/constants";
 import { computeDueDate, currentPeriod, endOfIstDayAfter, formatBillingPeriod } from "@/lib/dates";
 
 /** Minimum time a late-added fee gets before it falls due. */
 const LATE_ADDITION_GRACE_DAYS = 7;
 
-/** Active vehicles of active, parking-eligible employees who are not on a free pass, in an active category. */
+/** Active vehicles of active, parking-eligible people who are not on a free pass, including administrators. */
 async function eligibleVehicles(scope: Prisma.VehicleWhereInput = {}) {
   return prisma.vehicle.findMany({
     where: {
       ...scope,
       status: "ACTIVE",
       category: { active: true },
-      user: { role: "EMPLOYEE", status: "ACTIVE", parkingEligible: true, freePass: false },
+      user: { role: { in: [...ROSTER_ROLES] }, status: "ACTIVE", parkingEligible: true, freePass: false },
     },
     select: {
       id: true,

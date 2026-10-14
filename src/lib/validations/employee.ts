@@ -19,6 +19,7 @@ const employeeDetailsSchema = z.object({
   parkingEligible: z.boolean(),
   freePass: z.boolean(),
   status: z.enum(["ACTIVE", "INACTIVE"]),
+  role: z.enum(["ADMIN", "EMPLOYEE"]).optional(),
 });
 
 /** The work email must be picked from the Microsoft directory; it cannot be changed later. */

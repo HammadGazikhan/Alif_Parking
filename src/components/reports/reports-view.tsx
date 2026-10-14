@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { BarChart3, FileSpreadsheet, FileText, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CollectionChart } from "@/components/dashboard/collection-chart";
 import { FilterSelect } from "@/components/shared/filters";
@@ -12,37 +12,59 @@ import { SectionCard } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { api } from "@/lib/api-client";
-import { currentPeriod, formatBillingPeriod, formatDate, shiftPeriod } from "@/lib/dates";
+import { formatBillingPeriod, formatDate } from "@/lib/dates";
 import { formatINR } from "@/lib/money";
 import type { Jsonify } from "@/lib/types";
 import type { FeeListItem } from "@/server/services/parking-fee.service";
 import type { MonthlyCollectionRow } from "@/server/services/report.service";
 
+type FeePeriod = { month: number; year: number };
+
 type ReportResponse = {
   monthly: MonthlyCollectionRow[];
   totals: { expected: number; collected: number; outstanding: number };
   rows: Jsonify<FeeListItem>[];
+  periods: FeePeriod[];
 };
 
-const toMonthValue = (p: { month: number; year: number }) => `${p.year}-${String(p.month).padStart(2, "0")}`;
+const NO_FEES = "No fees have been generated for that month.";
+
+const toMonthValue = (p: FeePeriod) => `${p.year}-${String(p.month).padStart(2, "0")}`;
+
+function defaultWindow(periods: FeePeriod[]) {
+  const values = periods.map(toMonthValue);
+  const latest = values.slice(-6);
+  return { from: latest[0] ?? "", to: values.at(-1) ?? "", pass: values.at(-1) ?? "" };
+}
 
 export function ReportsView({ employees }: { employees: { id: string; name: string; email: string }[] }) {
-  const defaults = useMemo(() => {
-    const now = currentPeriod();
-    return { from: toMonthValue(shiftPeriod(now, -5)), to: toMonthValue(now) };
-  }, []);
-  const [from, setFrom] = useState(defaults.from);
-  const [to, setTo] = useState(defaults.to);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [status, setStatus] = useState("all");
   const [userId, setUserId] = useState("all");
-  const [passMonth, setPassMonth] = useState(() => toMonthValue(currentPeriod()));
+  const [passMonth, setPassMonth] = useState("");
+  const seeded = useRef(false);
 
   const filters = { from, to, status, userId };
   const query = useQuery({
     queryKey: ["reports", filters],
-    queryFn: () => api<ReportResponse>("/api/reports", { query: filters }),
+    queryFn: () =>
+      api<ReportResponse>("/api/reports", {
+        query: from && to ? filters : { status, userId },
+      }),
     placeholderData: keepPreviousData,
   });
+
+  const periods = query.data?.periods ?? [];
+
+  useEffect(() => {
+    if (!query.data || seeded.current) return;
+    seeded.current = true;
+    const next = defaultWindow(query.data.periods);
+    setFrom(next.from);
+    setTo(next.to);
+    setPassMonth(next.pass);
+  }, [query.data]);
 
   const exportHref = (format: "csv" | "xlsx") => {
     const params = new URLSearchParams({ format });
@@ -51,27 +73,46 @@ export function ReportsView({ employees }: { employees: { id: string; name: stri
   };
 
   const resetFilters = () => {
-    setFrom(defaults.from);
-    setTo(defaults.to);
+    const next = defaultWindow(periods);
+    setFrom(next.from);
+    setTo(next.to);
     setStatus("all");
     setUserId("all");
   };
 
   const data = query.data;
+  const periodOptions = periods.map((period) => ({
+    value: toMonthValue(period),
+    label: formatBillingPeriod(period.month, period.year),
+  }));
+  const knownMonths = new Set(periodOptions.map((option) => option.value));
+  const canExport = knownMonths.has(from) && knownMonths.has(to) && from <= to;
+  const canPass = knownMonths.has(passMonth);
+  const noFees = data !== undefined && periods.length === 0;
   const rate = data?.totals.expected ? Math.round((data.totals.collected / data.totals.expected) * 100) : 0;
 
   return (
     <div className="space-y-6">
       <div className="surface-card flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:flex-wrap lg:items-end">
         <div className="grid grid-cols-2 gap-3 lg:flex">
-          <label className="space-y-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">From</span>
-            <Input type="month" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} className="lg:w-44" />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">To</span>
-            <Input type="month" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} className="lg:w-44" />
-          </label>
+          <MonthField
+            label="From"
+            value={from}
+            options={periodOptions.filter((option) => !to || option.value <= to)}
+            onChange={(value) => {
+              setFrom(value);
+              if (to && value > to) setTo(value);
+            }}
+          />
+          <MonthField
+            label="To"
+            value={to}
+            options={periodOptions.filter((option) => !from || option.value >= from)}
+            onChange={(value) => {
+              setTo(value);
+              if (from && value < from) setFrom(value);
+            }}
+          />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex">
           <FilterSelect
@@ -96,30 +137,48 @@ export function ReportsView({ employees }: { employees: { id: string; name: stri
           <Button variant="ghost" size="sm" onClick={resetFilters}>
             <RotateCcw /> Reset
           </Button>
-          <Button variant="outline" asChild>
-            <a href={exportHref("csv")} download>
+          {canExport ? (
+            <Button variant="outline" asChild>
+              <a href={exportHref("csv")} download>
+                <FileText /> CSV
+              </a>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
               <FileText /> CSV
-            </a>
-          </Button>
-          <Button variant="ink" asChild>
-            <a href={exportHref("xlsx")} download>
+            </Button>
+          )}
+          {canExport ? (
+            <Button variant="ink" asChild>
+              <a href={exportHref("xlsx")} download>
+                <FileSpreadsheet /> Excel
+              </a>
+            </Button>
+          ) : (
+            <Button variant="ink" disabled>
               <FileSpreadsheet /> Excel
-            </a>
-          </Button>
+            </Button>
+          )}
         </div>
-        <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3 lg:w-full">
-          <label className="space-y-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Pass list month</span>
-            <Input type="month" value={passMonth} onChange={(e) => e.target.value && setPassMonth(e.target.value)} className="lg:w-44" />
-          </label>
-          <Button variant="outline" asChild>
-            <a
-              href={`/api/reports/pass-list?month=${Number(passMonth.slice(5))}&year=${Number(passMonth.slice(0, 4))}`}
-              download
-            >
-              <FileSpreadsheet /> CHP pass list (Excel)
-            </a>
-          </Button>
+        <div className="flex flex-col gap-2 border-t border-border pt-3 lg:w-full">
+          <div className="flex flex-wrap items-end gap-2">
+            <MonthField label="Pass list month" value={passMonth} options={periodOptions} onChange={setPassMonth} />
+            {canPass ? (
+              <Button variant="outline" asChild>
+                <a
+                  href={`/api/reports/pass-list?month=${Number(passMonth.slice(5))}&year=${Number(passMonth.slice(0, 4))}`}
+                  download
+                >
+                  <FileSpreadsheet /> CHP pass list (Excel)
+                </a>
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>
+                <FileSpreadsheet /> CHP pass list (Excel)
+              </Button>
+            )}
+          </div>
+          {noFees ? <p className="text-sm text-muted-foreground">{NO_FEES}</p> : null}
         </div>
       </div>
 
@@ -138,7 +197,11 @@ export function ReportsView({ employees }: { employees: { id: string; name: stri
 
           <SectionCard
             title="Collection by month"
-            description={`${formatBillingPeriod(Number(from.slice(5)), Number(from.slice(0, 4)))} – ${formatBillingPeriod(Number(to.slice(5)), Number(to.slice(0, 4)))}`}
+            description={
+              from && to
+                ? `${formatBillingPeriod(Number(from.slice(5)), Number(from.slice(0, 4)))} – ${formatBillingPeriod(Number(to.slice(5)), Number(to.slice(0, 4)))}`
+                : undefined
+            }
             contentClassName="px-3 pt-4 pb-3 sm:px-5"
           >
             {data ? <CollectionChart data={data.monthly} height={280} /> : <Skeleton className="h-[280px] w-full rounded-xl" />}
@@ -213,6 +276,37 @@ export function ReportsView({ employees }: { employees: { id: string; name: stri
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function MonthField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  const disabled = options.length === 0 || !options.some((option) => option.value === value);
+  return (
+    <div className="flex min-w-[12.5rem] flex-col gap-1.5">
+      <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</span>
+      <Select key={value || "empty"} value={value || undefined} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger className="w-full min-w-[12.5rem]" aria-label={label}>
+          <SelectValue placeholder={options.length === 0 ? "No months" : label} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

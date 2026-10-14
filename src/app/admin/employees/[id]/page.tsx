@@ -71,6 +71,7 @@ export default async function EmployeeDetailPage({ params }: PageProps<"/admin/e
               ) : (
                 <StatusBadge label="Parking disabled" tone="neutral" />
               )}
+              {employee.role === "ADMIN" ? <StatusBadge label="Administrator" tone="gold" /> : null}
               {employee.freePass ? <StatusBadge label="Free pass" tone="info" /> : null}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -90,6 +91,7 @@ export default async function EmployeeDetailPage({ params }: PageProps<"/admin/e
               parkingEligible: employee.parkingEligible,
               freePass: employee.freePass,
               status: employee.status,
+              role: employee.role,
             }}
           />
         </div>

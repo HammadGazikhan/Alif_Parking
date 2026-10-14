@@ -10,6 +10,7 @@ import {
   TestTube2,
   UserRound,
   Users,
+  WalletCards,
 } from "lucide-react";
 
 export type NavItem = { title: string; href: string; icon: LucideIcon; match?: string };
@@ -17,7 +18,10 @@ export type NavSection = { label?: string; items: NavItem[] };
 
 export const ADMIN_NAV: NavSection[] = [
   {
-    items: [{ title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard }],
+    items: [
+      { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+      { title: "My parking", href: "/employee/dashboard", icon: WalletCards, match: "/employee" },
+    ],
   },
   {
     label: "Manage",

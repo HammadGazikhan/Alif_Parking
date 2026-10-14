@@ -18,16 +18,16 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           aria-hidden
         />
         <div className="relative flex flex-1 flex-col justify-between p-10 xl:p-14">
-          <AlifLogo />
+          <AlifLogo subtitle="Parking Fees" />
 
           <div className="max-w-xl">
-            <p className="eyebrow text-gold">Employee Parking Platform</p>
+            <p className="eyebrow text-gold">Employee parking fees</p>
             <h2 className="mt-4 text-4xl leading-[1.1] font-bold tracking-tight text-white xl:text-5xl">
-              Parking, handled with the same care as your cloud.
+              Monthly parking fees, settled in one place.
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-white/65">
-              Manage vehicles, monthly parking fees and payments for every Alif team member — from one secure,
-              modern workspace.
+              See what you owe, pay your parking fee, and keep dues, reminders, and receipts together for the Alif
+              team.
             </p>
 
             <div className="glass-panel mt-10 rounded-3xl p-5">
@@ -49,7 +49,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
       <main className="relative flex flex-col bg-card">
         <div className="flex items-center justify-between p-6 lg:hidden">
-          <AlifLogo tone="dark" />
+          <AlifLogo tone="dark" subtitle="Parking Fees" />
         </div>
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">{children}</div>
         <footer className="px-6 pb-6 text-center text-[11px] text-muted-foreground sm:px-10">

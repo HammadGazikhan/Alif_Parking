@@ -3,7 +3,9 @@ import type { ParkingFeeStatus, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { feeListInclude } from "@/server/services/parking-fee.service";
 import type { ReportQuery } from "@/lib/validations/payment";
+import { ROSTER_ROLES } from "@/lib/constants";
 import { currentPeriod, daysOverdue, formatBillingPeriod, periodKey, shiftPeriod } from "@/lib/dates";
+import { ValidationError } from "@/server/errors";
 
 type Period = { month: number; year: number };
 
@@ -117,7 +119,7 @@ export async function getDashboardStats(now: Date = new Date()) {
   const period = currentPeriod(now);
   const previous = shiftPeriod(period, -1);
   const [totalEmployees, activeVehicles, current, prev, outstanding, newEmployees] = await Promise.all([
-    prisma.user.count({ where: { role: "EMPLOYEE", status: "ACTIVE" } }),
+    prisma.user.count({ where: { role: { in: [...ROSTER_ROLES] }, status: "ACTIVE" } }),
     prisma.vehicle.count({ where: { status: "ACTIVE", user: { status: "ACTIVE" } } }),
     getStatusBreakdown(period),
     getStatusBreakdown(previous),
@@ -127,7 +129,7 @@ export async function getDashboardStats(now: Date = new Date()) {
       _count: { _all: true },
     }),
     prisma.user.count({
-      where: { role: "EMPLOYEE", createdAt: { gte: new Date(now.getTime() - 30 * 86_400_000) } },
+      where: { role: { in: [...ROSTER_ROLES] }, createdAt: { gte: new Date(now.getTime() - 30 * 86_400_000) } },
     }),
   ]);
   const expected = current.PAID.amount + current.DUE.amount + current.OVERDUE.amount;
@@ -164,6 +166,32 @@ export async function getDueFees(limit = 8, now: Date = new Date()) {
     take: limit,
   });
   return fees.map((f) => ({ ...f, daysOverdue: daysOverdue(f.dueDate, now) }));
+}
+
+const NO_FEES_MESSAGE = "No fees have been generated for that month.";
+
+export async function listFeePeriods(): Promise<Period[]> {
+  const grouped = await prisma.parkingFee.groupBy({
+    by: ["year", "month"],
+    where: { status: { not: "CANCELLED" } },
+  });
+  return grouped
+    .map((row) => ({ month: row.month, year: row.year }))
+    .sort((a, b) => a.year - b.year || a.month - b.month);
+}
+
+export async function assertPeriodHasFees(month: number, year: number) {
+  const count = await prisma.parkingFee.count({
+    where: { month, year, status: { not: "CANCELLED" } },
+  });
+  if (count === 0) throw new ValidationError(NO_FEES_MESSAGE);
+}
+
+export async function assertReportHasFees(query: ReportQuery) {
+  const count = await prisma.parkingFee.count({
+    where: { AND: [buildReportWhere(query), { status: { not: "CANCELLED" } }] },
+  });
+  if (count === 0) throw new ValidationError(NO_FEES_MESSAGE);
 }
 
 export async function getReportRows(query: ReportQuery, take = 5000) {

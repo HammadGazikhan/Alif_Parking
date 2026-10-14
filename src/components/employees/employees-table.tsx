@@ -94,7 +94,10 @@ export function EmployeesTable() {
         <div className="flex items-center gap-3">
           <InitialsAvatar name={row.name} src={row.avatarType ? `/api/employees/${row.id}/avatar` : undefined} />
           <div className="min-w-0">
-            <p className="truncate font-semibold">{row.name}</p>
+            <p className="flex items-center gap-2 truncate font-semibold">
+              <span className="truncate">{row.name}</span>
+              {row.role === "ADMIN" ? <StatusBadge label="Administrator" tone="gold" /> : null}
+            </p>
             {row.designation ? <p className="truncate text-xs text-muted-foreground">{row.designation}</p> : null}
             <p className="truncate text-xs text-muted-foreground">{row.email}</p>
           </div>
@@ -196,7 +199,10 @@ export function EmployeesTable() {
                 <InitialsAvatar name={row.name} src={row.avatarType ? `/api/employees/${row.id}/avatar` : undefined} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-semibold">{row.name}</p>
+                    <p className="flex min-w-0 items-center gap-2 truncate font-semibold">
+                      <span className="truncate">{row.name}</span>
+                      {row.role === "ADMIN" ? <StatusBadge label="Administrator" tone="gold" /> : null}
+                    </p>
                     <StatusBadge status={row.status} />
                   </div>
                   {row.designation ? <p className="truncate text-xs text-muted-foreground">{row.designation}</p> : null}

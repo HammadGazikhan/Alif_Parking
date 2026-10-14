@@ -36,10 +36,6 @@ export const proxy = auth((req) => {
   if (pathname.startsWith("/admin") && user.role !== "ADMIN") {
     return NextResponse.redirect(new URL(home, req.nextUrl));
   }
-  if (pathname.startsWith("/employee") && user.role !== "EMPLOYEE") {
-    return NextResponse.redirect(new URL(home, req.nextUrl));
-  }
-
   return NextResponse.next();
 });
 

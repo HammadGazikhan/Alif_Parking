@@ -7,6 +7,7 @@ import { paginate, skipTake } from "@/server/services/pagination";
 import { ConflictError, NotFoundError, ValidationError, isUniqueConstraintError } from "@/server/errors";
 import type { CurrentUser } from "@/server/auth/guards";
 import type { VehicleInput, VehicleListQuery, VehicleUpdateInput } from "@/lib/validations/vehicle";
+import { ROSTER_ROLES } from "@/lib/constants";
 import { normalizeVehicleNumber } from "@/lib/vehicle";
 
 const vehicleListInclude = {
@@ -59,7 +60,7 @@ async function assertCategoryAssignable(categoryId: string) {
 }
 
 async function assertOwnerIsEmployee(userId: string) {
-  const owner = await prisma.user.findFirst({ where: { id: userId, role: "EMPLOYEE" }, select: { id: true } });
+  const owner = await prisma.user.findFirst({ where: { id: userId, role: { in: [...ROSTER_ROLES] } }, select: { id: true } });
   if (!owner) throw new ValidationError("Select a valid employee.", { userId: "Select a valid employee" });
 }
 

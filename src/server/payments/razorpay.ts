@@ -103,6 +103,7 @@ export const razorpayGateway: PaymentGateway = {
   id: "RAZORPAY",
 
   async createCollectRequest(input) {
+    const notes = { ...input.notes, payment_ref: input.reference };
     const qr = await razorpayFetch<{ id: string; image_url: string }>("/payments/qr_codes", {
       method: "POST",
       body: JSON.stringify({
@@ -113,10 +114,28 @@ export const razorpayGateway: PaymentGateway = {
         payment_amount: input.amount,
         description: input.description.slice(0, 255),
         close_by: Math.floor(input.expiresAt.getTime() / 1000),
-        notes: { ...input.notes, payment_ref: input.reference },
+        notes,
       }),
     });
-    return { orderId: qr.id, qrCodeId: qr.id, qrImageUrl: qr.image_url, upiUri: null, raw: qr };
+    try {
+      const order = await razorpayFetch<{ id: string }>("/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          amount: input.amount,
+          currency: input.currency,
+          receipt: input.reference.slice(0, 40),
+          notes,
+        }),
+      });
+      return { orderId: order.id, qrCodeId: qr.id, qrImageUrl: qr.image_url, upiUri: null, raw: { qr, order } };
+    } catch (error) {
+      try {
+        await razorpayFetch(`/payments/qr_codes/${encodeURIComponent(qr.id)}/close`, { method: "POST" });
+      } catch (closeError) {
+        console.warn("[razorpay] failed to close QR after order error", closeError);
+      }
+      throw error;
+    }
   },
 
   async closeCollectRequest({ qrCodeId }) {
@@ -136,12 +155,26 @@ export const razorpayGateway: PaymentGateway = {
     return parseRazorpayStyleEvent(rawBody, headers.get("x-razorpay-event-id"));
   },
 
-  async fetchSuccessfulPayment({ qrCodeId }) {
-    if (!qrCodeId) return null;
-    const res = await razorpayFetch<{ items: RazorpayPaymentEntity[] }>(
-      `/payments/qr_codes/${encodeURIComponent(qrCodeId)}/payments`,
-    );
-    const captured = res.items.find((p) => p.status === "captured");
-    return captured ? toSuccess(captured) : null;
+  async fetchSuccessfulPayment({ orderId, qrCodeId }) {
+    const captured = (items: RazorpayPaymentEntity[] | undefined) => items?.find((p) => p.status === "captured");
+    if (qrCodeId) {
+      try {
+        const qrPayments = await razorpayFetch<{ items: RazorpayPaymentEntity[] }>(
+          `/payments/qr_codes/${encodeURIComponent(qrCodeId)}/payments`,
+        );
+        const paid = captured(qrPayments.items);
+        if (paid) return toSuccess(paid);
+      } catch (error) {
+        console.warn("[razorpay] QR payment lookup failed", error);
+      }
+    }
+    if (orderId?.startsWith("order_")) {
+      const orderPayments = await razorpayFetch<{ items: RazorpayPaymentEntity[] }>(
+        `/orders/${encodeURIComponent(orderId)}/payments`,
+      );
+      const paid = captured(orderPayments.items);
+      if (paid) return toSuccess(paid);
+    }
+    return null;
   },
 };
