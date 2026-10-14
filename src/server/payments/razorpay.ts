@@ -76,6 +76,7 @@ export function parseRazorpayStyleEvent(rawBody: string, eventId: string | null)
     qrCodeId: qr?.id,
     orderId: order?.id ?? payment?.order_id ?? qr?.id ?? undefined,
     paymentRef: notes.payment_ref,
+    feeId: notes.fee_id,
   };
   const base = {
     eventId: eventId || sha256Hex(rawBody),

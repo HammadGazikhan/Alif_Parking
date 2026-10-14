@@ -28,3 +28,6 @@ export const MAX_PAGE_SIZE = 100;
 
 /** How long a generated payment QR stays valid. */
 export const PAYMENT_QR_TTL_MINUTES = 15;
+
+/** Stored when a QR closes before Razorpay has reported a capture. */
+export const QR_EXPIRED_FAILURE = "QR code expired before payment was received";

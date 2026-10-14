@@ -33,7 +33,7 @@ export type ParsedWebhookEvent = {
   eventId: string;
   type: string;
   outcome: "success" | "failed" | "ignored";
-  reference: { orderId?: string; qrCodeId?: string; paymentRef?: string };
+  reference: { orderId?: string; qrCodeId?: string; paymentRef?: string; feeId?: string };
   success?: GatewaySuccess;
   failureReason?: string;
   gatewayPaymentId?: string;

@@ -21,6 +21,7 @@ import { api } from "@/lib/api-client";
 import { errorMessage } from "@/lib/error-message";
 import { formatDateTime } from "@/lib/dates";
 import { formatINR } from "@/lib/money";
+import { QR_EXPIRED_FAILURE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { CheckoutView } from "@/server/services/payment.service";
 
@@ -36,6 +37,7 @@ export type CheckoutFee = {
 };
 
 const POLL_MS = 3000;
+const EXPIRED_RECHECK_MS = 2 * 60 * 60 * 1000;
 
 const UPI_APPS = [
   { name: "Google Pay", scheme: "tez://upi/pay", tone: "bg-white text-ink" },
@@ -78,8 +80,13 @@ export function PayCheckout({ fee, simulate }: { fee: CheckoutFee; simulate: boo
     enabled: !!paymentId,
     initialData: createOrder.data?.id === paymentId ? createOrder.data : undefined,
     refetchInterval: (q) => {
-      const s = q.state.data?.status;
-      return s === "PENDING" || s === "CREATED" || !s ? POLL_MS : false;
+      const data = q.state.data;
+      const s = data?.status;
+      if (s === "PENDING" || s === "CREATED" || !s) return POLL_MS;
+      if (s === "FAILED" && data?.failureReason === QR_EXPIRED_FAILURE && data.expiresAt) {
+        if (Date.now() < new Date(data.expiresAt).getTime() + EXPIRED_RECHECK_MS) return POLL_MS;
+      }
+      return false;
     },
     refetchIntervalInBackground: true,
   });

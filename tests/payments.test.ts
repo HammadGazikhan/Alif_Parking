@@ -56,6 +56,10 @@ describe("payment order creation", () => {
     expect(polled.status).toBe("FAILED");
     expect(polled.qrImageUrl).toBeNull();
     expect((await prisma.parkingFee.findUniqueOrThrow({ where: { id: fee.id } })).status).toBe("DUE");
+
+    const again = await getPaymentStatus(employee, view.id);
+    expect(again.status).toBe("FAILED");
+    expect(again.failureReason).toMatch(/expired/);
   });
 
   it("only issues receipts for successful payments", async () => {

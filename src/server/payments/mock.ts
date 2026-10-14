@@ -58,16 +58,22 @@ export const mockGateway: PaymentGateway = {
 
 /** Build a signed, Razorpay-shaped event as the mock gateway would send it. */
 export function buildMockWebhook(params: {
-  qrCodeId: string;
+  qrCodeId?: string;
   amount: number;
   outcome: "success" | "failed";
   paymentRef: string;
+  feeId?: string;
+  event?: "qr_code.credited" | "payment.captured" | "payment.failed";
 }) {
   const gatewayPaymentId = id("pay_MOCK");
   const now = Math.floor(Date.now() / 1000);
+  const notes = {
+    payment_ref: params.paymentRef,
+    ...(params.feeId ? { fee_id: params.feeId } : {}),
+  };
   const body = JSON.stringify({
     entity: "event",
-    event: params.outcome === "success" ? "qr_code.credited" : "payment.failed",
+    event: params.event ?? (params.outcome === "success" ? "qr_code.credited" : "payment.failed"),
     created_at: now,
     payload: {
       payment: {
@@ -81,10 +87,12 @@ export function buildMockWebhook(params: {
           vpa: "employee@okaxis",
           created_at: now,
           error_description: params.outcome === "failed" ? "Payment declined by payer" : null,
-          notes: { payment_ref: params.paymentRef },
+          notes,
         },
       },
-      qr_code: { entity: { id: params.qrCodeId, entity: "qr_code", notes: { payment_ref: params.paymentRef } } },
+      ...(params.qrCodeId
+        ? { qr_code: { entity: { id: params.qrCodeId, entity: "qr_code", notes } } }
+        : {}),
     },
   });
   const headers = new Headers({

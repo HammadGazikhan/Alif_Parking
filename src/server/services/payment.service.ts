@@ -10,7 +10,7 @@ import { ConflictError, NotFoundError } from "@/server/errors";
 import type { CurrentUser } from "@/server/auth/guards";
 import type { PaymentListQuery } from "@/lib/validations/payment";
 import { formatBillingPeriod } from "@/lib/dates";
-import { PAYMENT_QR_TTL_MINUTES } from "@/lib/constants";
+import { PAYMENT_QR_TTL_MINUTES, QR_EXPIRED_FAILURE } from "@/lib/constants";
 import { normalizeVehicleNumber } from "@/lib/vehicle";
 import { env } from "@/server/env";
 
@@ -180,13 +180,14 @@ export async function getPaymentStatus(
 ): Promise<CheckoutView> {
   let payment = await loadPaymentFor(user, paymentId);
   const isOpen = payment.status === "PENDING" || payment.status === "CREATED";
-  if (!isOpen) return toCheckoutView(payment);
+  const expiredMiss = payment.status === "FAILED" && payment.failureReason === QR_EXPIRED_FAILURE;
+  if (!isOpen && !expiredMiss) return toCheckoutView(payment);
 
   const now = Date.now();
   const expired = payment.expiresAt ? payment.expiresAt.getTime() < now : false;
   const stale = now - payment.updatedAt.getTime() > RECONCILE_AFTER_MS;
 
-  if (expired || stale || options?.reconcile) {
+  if (expiredMiss || expired || stale || options?.reconcile) {
     const gateway = gatewayFor(payment.provider);
     const success = await gateway
       .fetchSuccessfulPayment({ orderId: payment.orderId, qrCodeId: payment.qrCodeId })
@@ -201,13 +202,13 @@ export async function getPaymentStatus(
         return applySuccessfulPayment(tx, fresh, success, "reconciliation");
       });
       await outcome.dispatch?.();
-    } else if (expired) {
+    } else if (expired && isOpen) {
       await prisma.payment.updateMany({
         where: { id: payment.id, status: { in: ["CREATED", "PENDING"] } },
-        data: { status: "FAILED", failureReason: "QR code expired before payment was received" },
+        data: { status: "FAILED", failureReason: QR_EXPIRED_FAILURE },
       });
       await gateway.closeCollectRequest({ orderId: payment.orderId, qrCodeId: payment.qrCodeId });
-    } else {
+    } else if (isOpen) {
       await prisma.payment.update({ where: { id: payment.id }, data: { updatedAt: new Date() } });
     }
     payment = await loadPaymentFor(user, paymentId);

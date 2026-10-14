@@ -132,6 +132,47 @@ describe("payment webhook", () => {
     expect(late.failureReason).toMatch(/refund required/);
   });
 
+  it("settles payment.captured when the body only has notes", async () => {
+    const { payment, fee } = await pendingPayment();
+    const event = buildMockWebhook({
+      amount: payment.amount,
+      outcome: "success",
+      paymentRef: payment.id,
+      feeId: fee.id,
+      event: "payment.captured",
+    });
+
+    const res = await processWebhook(event.body, event.headers);
+    expect(res).toEqual({ status: 200, body: { received: true, result: "settled" } });
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe("SUCCESS");
+    expect((await prisma.parkingFee.findUniqueOrThrow({ where: { id: fee.id } })).status).toBe("PAID");
+  });
+
+  it("recreates a deleted payment from notes and keeps the captured amount", async () => {
+    const { payment, fee } = await pendingPayment(15000);
+    await prisma.payment.delete({ where: { id: payment.id } });
+    await prisma.parkingFee.update({
+      where: { id: fee.id },
+      data: { baseAmount: 100, lateFee: 0, amount: 100 },
+    });
+    const event = buildMockWebhook({
+      amount: 15000,
+      outcome: "success",
+      paymentRef: payment.id,
+      feeId: fee.id,
+      event: "payment.captured",
+    });
+
+    const res = await processWebhook(event.body, event.headers);
+    expect(res.body.result).toBe("settled");
+
+    const restored = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+    expect(restored.status).toBe("SUCCESS");
+    expect(restored.amount).toBe(15000);
+    expect(restored.paymentId).toBe(event.gatewayPaymentId);
+    expect((await prisma.parkingFee.findUniqueOrThrow({ where: { id: fee.id } })).status).toBe("PAID");
+  });
+
   it("allows at most one SUCCESS payment per fee at the database level", async () => {
     const { fee } = await employeeWithFee();
     const base = { parkingFeeId: fee.id, provider: "MOCK" as const, amount: fee.amount, status: "SUCCESS" as const };
