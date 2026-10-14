@@ -293,6 +293,7 @@ function PayOnThisPhone({ view, disabled, onPaid }: { view: CheckoutView; disabl
   const [opening, setOpening] = useState(false);
   const checkout = view.checkout;
   if (!checkout) return null;
+  const { keyId, orderId } = checkout;
 
   async function pay() {
     setOpening(true);
@@ -300,12 +301,12 @@ function PayOnThisPhone({ view, disabled, onPaid }: { view: CheckoutView; disabl
       await loadCheckout();
       if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded.");
       new window.Razorpay({
-        key: checkout.keyId,
+        key: keyId,
         amount: view.amount,
         currency: view.currency,
         name: "Alif Parking Fees",
         description: `${view.fee.period} · ${view.fee.vehicleNumber}`,
-        order_id: checkout.orderId,
+        order_id: orderId,
         handler: () => onPaid(),
         theme: { color: "#111111" },
       }).open();
